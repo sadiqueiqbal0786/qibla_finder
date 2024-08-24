@@ -135,7 +135,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(
               width: 2,
             ),
-            Text(
+            const Text(
               'Qibla Compass',
               style:
                   TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
@@ -144,13 +144,13 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         actions: [
           Container(
-            padding: EdgeInsets.all(15),
+            padding: const EdgeInsets.all(15),
             child: GestureDetector(
               onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
                       builder: (context) => PrivacyPolicyScreen())),
-              child: Icon(
+              child: const Icon(
                 Icons.info,
                 color: Colors.white,
               ),
@@ -171,31 +171,117 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  'Current Location: $_currentLocation',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                Container(
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.all(15),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const Spacer(),
+                      Container(
+                        width: 160,
+                        padding: const EdgeInsets.all(10),
+                        decoration: const BoxDecoration(color: Colors.green),
+                        child: Text(
+                          _currentLocation,
+                          style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(
+                        width: 30,
+                      ),
+                      Container(
+                        alignment: Alignment.center,
+                        width: 160,
+                        padding: const EdgeInsets.all(10),
+                        decoration: const BoxDecoration(color: Colors.green),
+                        child: Text(
+                          _currentTime,
+                          style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const Spacer(),
+                    ],
+                  ),
                 ),
-                SizedBox(height: 20),
-                Text(
-                  'Current Time: $_currentTime',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const Spacer(),
+                    Container(
+                      width: 160,
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.all(10),
+                      decoration: const BoxDecoration(color: Colors.green),
+                      child: Text(
+                        _currentDay,
+                        style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(
+                      width: 30,
+                    ),
+                    Container(
+                      width: 160,
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.all(10),
+                      decoration: const BoxDecoration(color: Colors.green),
+                      child: Text(
+                        '${DateFormat('yyyy-MM-dd').format(DateTime.now())}',
+                        style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const Spacer(),
+                  ],
                 ),
-                SizedBox(height: 20),
-                Text(
-                  'Current Day: $_currentDay',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                const SizedBox(height: 10),
+                Container(
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.all(10),
+                  decoration: const BoxDecoration(color: Colors.green),
+                  child: Column(
+                    children: [
+                      const Text(
+                        'Qibla Angle',
+                        style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white),
+                      ),
+                      const SizedBox(
+                        height: 5,
+                      ),
+                      Text(
+                        '${_qiblaDirection.toStringAsFixed(2)}° degree', // Display Qibla angle here
+                        style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
                 ),
-                SizedBox(height: 20),
-                Text(
-                  'Current Date: ${DateFormat('yyyy-MM-dd').format(DateTime.now())}',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                SizedBox(height: 20),
-                Text(
-                  'Qibla Angle: $_qiblaDirection°', // Display Qibla angle here
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                SizedBox(height: 20),
+                const SizedBox(height: 30),
                 Transform.rotate(
                   angle: -_heading * (math.pi / 180),
                   child: Stack(
