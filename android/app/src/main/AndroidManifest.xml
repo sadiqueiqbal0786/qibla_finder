@@ -5,6 +5,15 @@
 
     <!-- Internet Permission -->
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Prayer time reminders -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- SCHEDULE_EXACT_ALARM only. USE_EXACT_ALARM is a Play-restricted
+         permission limited to alarm/clock apps and needs a policy declaration;
+         reminders fall back to inexact scheduling when exact is unavailable. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <application
         android:label="qibla_finder"
         android:name="${applicationName}"
@@ -35,5 +44,19 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- flutter_local_notifications: deliver and restore prayer reminders -->
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
+            android:exported="false" />
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>
