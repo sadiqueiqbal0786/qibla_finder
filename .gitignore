@@ -41,3 +41,13 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Signing secrets — never commit these.
+# The upload keystore and its password are the only thing standing between
+# you and another Play upload-key reset. Back them up outside the repo.
+# (android/.gitignore covers the android/ subtree; these catch stray copies.)
+*.jks
+*.keystore
+*.p12
+key.properties
+**/key.properties
