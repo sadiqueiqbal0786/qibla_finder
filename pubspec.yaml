@@ -1,7 +1,7 @@
 name: qibla_finder
 description: "A new Flutter project."
 publish_to: 'none'
-version: 2.1.0+9
+version: 2.1.1+10
 
 environment:
   sdk: '>=3.9.0 <4.0.0'

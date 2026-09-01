@@ -83,7 +83,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         title: Row(
           children: [
             Image.asset(
-              'assets/icon/logos__white.png',
+              'assets/icon/icon_monochrome.png',
               width: 32,
               height: 32,
               fit: BoxFit.contain,

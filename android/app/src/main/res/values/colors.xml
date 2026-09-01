@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches the app surface, so the native launch window and the Flutter
+         splash that replaces it are the same colour. -->
+    <color name="brand_dark">#0E2C1E</color>
+</resources>
