@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../prayer/adhan_player.dart';
 import '../prayer/prayer_times.dart';
 import '../qibla_controller.dart';
+import '../widgets/status_view.dart';
 
 /// Today's schedule with a live countdown to the next prayer.
 class PrayerTimesScreen extends StatefulWidget {
@@ -64,7 +65,8 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
     return RefreshIndicator(
       color: const Color(0xFF156F3F),
       onRefresh: widget.controller.refresh,
-      child: ListView(
+      child: ContentWidth(
+        child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         children: [
@@ -143,6 +145,7 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
           const SizedBox(height: 20),
           _MethodFooter(controller: widget.controller),
         ],
+      ),
       ),
     );
   }

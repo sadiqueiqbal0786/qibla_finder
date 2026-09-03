@@ -177,3 +177,25 @@ class CalibrationBanner extends StatelessWidget {
     );
   }
 }
+
+/// Caps content width and centres it.
+///
+/// Phone layouts stretched edge to edge on a tablet, giving line lengths past
+/// comfortable reading. Constraining the column keeps one design working on
+/// both rather than needing a separate tablet layout.
+class ContentWidth extends StatelessWidget {
+  const ContentWidth({super.key, required this.child, this.maxWidth = 620});
+
+  final Widget child;
+  final double maxWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: child,
+      ),
+    );
+  }
+}

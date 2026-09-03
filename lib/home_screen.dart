@@ -174,24 +174,26 @@ class _CompassView extends StatelessWidget {
                   // height to distribute inside a scroll view and the whole
                   // subtree fails to lay out.
                   child: IntrinsicHeight(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-                      child: Column(
-                        children: [
-                          _PlaceLine(controller: controller),
-                          const SizedBox(height: 6),
-                          _TrustLine(compass: controller.compass),
-                          const Spacer(),
-                          QiblaCompass(
-                            compass: controller.compass,
-                            qiblaBearing: controller.qiblaBearing,
-                            size: compassSize,
-                          ),
-                          const SizedBox(height: 30),
-                          _TurnInstruction(controller: controller),
-                          const Spacer(),
-                          _FactsRow(controller: controller),
-                        ],
+                    child: ContentWidth(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                        child: Column(
+                          children: [
+                            _PlaceLine(controller: controller),
+                            const SizedBox(height: 6),
+                            _TrustLine(compass: controller.compass),
+                            const Spacer(),
+                            QiblaCompass(
+                              compass: controller.compass,
+                              qiblaBearing: controller.qiblaBearing,
+                              size: compassSize,
+                            ),
+                            const SizedBox(height: 30),
+                            _TurnInstruction(controller: controller),
+                            const Spacer(),
+                            _FactsRow(controller: controller),
+                          ],
+                        ),
                       ),
                     ),
                   ),
