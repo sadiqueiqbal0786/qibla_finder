@@ -22,7 +22,7 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
-  static const Duration _minimumDisplay = Duration(milliseconds: 1400);
+  static const Duration _minimumDisplay = Duration.zero;
 
   late final AnimationController _fade = AnimationController(
     vsync: this,
@@ -79,15 +79,12 @@ class _SplashScreenState extends State<SplashScreen>
                 height: 128,
                 fit: BoxFit.contain,
                 filterQuality: FilterQuality.medium,
-                errorBuilder: (context, error, stackTrace) => const Icon(
-                  Icons.explore,
-                  size: 108,
-                  color: Colors.white,
-                ),
+                errorBuilder: (context, error, stackTrace) =>
+                    const Icon(Icons.explore, size: 108, color: Colors.white),
               ),
               const SizedBox(height: 22),
               const Text(
-                'Qibla Compass',
+                'Qibla Finder',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 23,

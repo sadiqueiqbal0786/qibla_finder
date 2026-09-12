@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../l10n/app_strings.dart';
 
 /// A full-screen, always-actionable state.
 ///
@@ -57,7 +58,7 @@ class StatusView extends StatelessWidget {
                   ),
                   const SizedBox(height: 22),
                   Text(
-                    title,
+                    context.tr(title),
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       fontSize: 21,
@@ -67,7 +68,7 @@ class StatusView extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    message,
+                    context.tr(message),
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 15,
@@ -98,7 +99,7 @@ class StatusView extends StatelessWidget {
                                   color: Colors.white,
                                 ),
                               )
-                            : Text(primaryLabel!),
+                            : Text(context.tr(primaryLabel!)),
                       ),
                     ),
                   if (secondaryLabel != null) ...[
@@ -106,7 +107,7 @@ class StatusView extends StatelessWidget {
                     TextButton(
                       onPressed: busy ? null : onSecondary,
                       child: Text(
-                        secondaryLabel!,
+                        context.tr(secondaryLabel!),
                         style: const TextStyle(color: Color(0xFF23C486)),
                       ),
                     ),
@@ -116,63 +117,6 @@ class StatusView extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// Banner shown above the compass when the magnetometer cannot be trusted.
-class CalibrationBanner extends StatelessWidget {
-  const CalibrationBanner({
-    super.key,
-    required this.message,
-    required this.severe,
-    this.neutral = false,
-  });
-
-  final String message;
-  final bool severe;
-
-  /// Informational rather than a warning (used for the declination notice).
-  final bool neutral;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = neutral
-        ? const Color(0xFF15243A)
-        : (severe ? const Color(0xFFB3261E) : const Color(0xFF8A5A00));
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.94),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            neutral
-                ? Icons.check_circle_outline_rounded
-                : (severe
-                      ? Icons.warning_amber_rounded
-                      : Icons.explore_rounded),
-            color: Colors.white,
-            size: 19,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 13,
-                height: 1.3,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

@@ -5,8 +5,11 @@ import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../services/timezone_resolver.dart';
+import '../l10n/app_strings.dart';
 import 'calculation_method.dart';
 import 'prayer_times.dart';
+import 'prayer_settings.dart';
+import 'reminder_plan.dart';
 
 /// Schedules a local reminder at each prayer time.
 ///
@@ -39,7 +42,7 @@ class PrayerNotifications {
   /// Reminders are scheduled this many days ahead and topped up on each app
   /// launch. iOS caps pending notifications at 64, so a week of five prayers
   /// (35) leaves comfortable headroom.
-  static const int _daysAhead = 7;
+  static const int _daysAhead = 30;
 
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
@@ -53,7 +56,8 @@ class PrayerNotifications {
     try {
       await _prepareTimezone();
 
-      const android = AndroidInitializationSettings('@mipmap/launcher_icon');
+      // A colour launcher icon flattens to a shape with no compass in it.
+      const android = AndroidInitializationSettings('@drawable/ic_notification');
       const darwin = DarwinInitializationSettings(
         requestAlertPermission: false,
         requestBadgePermission: false,
@@ -90,15 +94,19 @@ class PrayerNotifications {
   Future<bool> requestPermission() async {
     if (!await initialize()) return false;
     try {
-      final android = _plugin.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
+      final android = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
       if (android != null) {
         final granted = await android.requestNotificationsPermission();
         return granted ?? false;
       }
 
-      final ios = _plugin.resolvePlatformSpecificImplementation<
-          IOSFlutterLocalNotificationsPlugin>();
+      final ios = _plugin
+          .resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin
+          >();
       if (ios != null) {
         final granted = await ios.requestPermissions(alert: true, sound: true);
         return granted ?? false;
@@ -110,72 +118,114 @@ class PrayerNotifications {
     }
   }
 
-  /// Clears and re-schedules reminders for the next [_daysAhead] days.
-  Future<void> reschedule({
+  Future<int> reschedule({
     required double latitude,
     required double longitude,
-    required CalculationMethod method,
-    required AsrMadhab asrMadhab,
-    required HighLatitudeRule highLatitudeRule,
-    AdhanMode adhanMode = AdhanMode.notificationOnly,
+    required PrayerSettings settings,
   }) async {
-    if (!await initialize()) return;
-
-    await cancelAll();
-
-    // Android 14 denies exact alarms by default to apps that are not clock or
-    // calendar apps, and this app deliberately does not request the
-    // Play-restricted USE_EXACT_ALARM. Ask once rather than letting 35
-    // schedule calls each throw and fall back.
+    if (!await initialize()) throw StateError('Notifications unavailable');
     final exact = await _canScheduleExact();
-
     final calculator = PrayerCalculator(
-      method: method,
-      asrMadhab: asrMadhab,
-      highLatitudeRule: highLatitudeRule,
+      method: settings.method,
+      asrMadhab: settings.asrMadhab,
+      highLatitudeRule: settings.highLatitudeRule,
+      offsets: settings.offsets,
     );
+    final zone = _timezones.resolve(latitude: latitude, longitude: longitude);
     final now = DateTime.now();
-
-    var id = 0;
-    for (var dayOffset = 0; dayOffset < _daysAhead; dayOffset++) {
-      final day = DateTime(now.year, now.month, now.day)
-          .add(Duration(days: dayOffset));
-
-      late final PrayerTimes times;
-      try {
-        // Resolved per day, not once: a DST transition can fall inside the
-        // seven-day window, and an hour-late Fajr reminder is a real failure.
-        final zone = _timezones.resolve(
+    final days = defaultTargetPlatform == TargetPlatform.iOS
+        ? (settings.advanceMinutes > 0 ? 5 : 7)
+        : _daysAhead;
+    final plan = buildReminderPlan(
+      now: now,
+      zoneName: zone?.name,
+      enabled: settings.prayerEnabled,
+      days: days,
+      advanceMinutes: settings.advanceMinutes,
+      fastingReminders:
+          settings.ramadanReminders && settings.ramadanMode != 'off',
+      suhoorAdvanceMinutes: settings.suhoorAdvanceMinutes,
+      hijriDayShift: settings.ramadanDayShift,
+      calculate: (day) {
+        final on = _timezones.resolve(
           latitude: latitude,
           longitude: longitude,
           date: day,
         );
-        times = calculator.forDate(
+        return calculator.forDate(
           date: day,
           latitude: latitude,
           longitude: longitude,
-          utcOffsetHours: zone?.offsetHours,
-          zoneName: zone?.name,
+          utcOffsetHours: on?.offsetHours,
+          zoneName: on?.name,
         );
-      } catch (error) {
-        debugPrint('PrayerNotifications: skipping $day: $error');
-        continue;
-      }
-
-      for (final prayer in Prayer.values) {
-        if (!prayer.isPrayer) continue;
-        final time = times[prayer];
-        if (time == null || !time.isAfter(now)) continue;
-
-        await _scheduleOne(
-          id: id++,
-          prayer: prayer,
-          at: time,
-          adhanMode: adhanMode,
-          exact: exact,
-        );
-      }
+      },
+    );
+    final old = await _plugin.pendingNotificationRequests();
+    final wanted = plan.map((entry) => entry.id).toSet();
+    // Remove obsolete preferences first, but preserve matching future alarms.
+    for (final item in old) {
+      if (!wanted.contains(item.id)) await _plugin.cancel(id: item.id);
     }
+    for (final entry in plan) {
+      await _scheduleOne(
+        id: entry.id,
+        prayer: entry.prayer,
+        label: entry.label,
+        at: entry.at,
+        adhanMode: entry.advance > 0
+            ? AdhanMode.notificationOnly
+            : settings.adhanMode,
+        exact: exact,
+        advance: entry.advance,
+        language: settings.language,
+        kind: entry.kind,
+      );
+    }
+    return plan.length;
+  }
+
+  Future<({bool allowed, bool exact, int pending})> status() async {
+    if (!await initialize()) return (allowed: false, exact: false, pending: 0);
+    final android = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    final ios = _plugin
+        .resolvePlatformSpecificImplementation<
+          IOSFlutterLocalNotificationsPlugin
+        >();
+    final allowed = android != null
+        ? await android.areNotificationsEnabled() ?? false
+        : (await ios?.checkPermissions())?.isEnabled ?? false;
+    return (
+      allowed: allowed,
+      exact: await _canScheduleExact(),
+      pending: (await _plugin.pendingNotificationRequests()).length,
+    );
+  }
+
+  Future<void> requestExactPermission() async {
+    await _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
+        ?.requestExactAlarmsPermission();
+  }
+
+  Future<void> testNotification({String language = 'en'}) async {
+    if (!await requestPermission()) {
+      throw StateError('Notification permission is off');
+    }
+    await _plugin.show(
+      id: 900001,
+      title: 'Qibla Finder',
+      body: AppStrings.translate('Your test reminder is working.', language),
+      notificationDetails: _detailsFor(
+        AdhanMode.notificationOnly,
+        Prayer.dhuhr,
+      ),
+    );
   }
 
   /// Builds the platform payload for the selected sound.
@@ -189,38 +239,36 @@ class PrayerNotifications {
 
     final android = switch (mode) {
       AdhanMode.silent => const AndroidNotificationDetails(
-          _channelSilent,
-          'Prayer reminders (silent)',
-          channelDescription: 'Prayer time reminders without a sound.',
-          importance: Importance.defaultImportance,
-          priority: Priority.defaultPriority,
-          playSound: false,
-          category: AndroidNotificationCategory.reminder,
-        ),
+        _channelSilent,
+        'Prayer reminders (silent)',
+        channelDescription: 'Prayer time reminders without a sound.',
+        importance: Importance.defaultImportance,
+        priority: Priority.defaultPriority,
+        playSound: false,
+        category: AndroidNotificationCategory.reminder,
+      ),
       AdhanMode.notificationOnly => const AndroidNotificationDetails(
-          _channelDefault,
-          'Prayer reminders',
-          channelDescription: 'Prayer time reminders with the default sound.',
-          importance: Importance.high,
-          priority: Priority.high,
-          category: AndroidNotificationCategory.reminder,
-        ),
+        _channelDefault,
+        'Prayer reminders',
+        channelDescription: 'Prayer time reminders with the default sound.',
+        importance: Importance.high,
+        priority: Priority.high,
+        category: AndroidNotificationCategory.reminder,
+      ),
       AdhanMode.adhan => AndroidNotificationDetails(
-          isFajr ? _channelAdhanFajr : _channelAdhan,
-          isFajr
-              ? 'Fajr reminder (adhan)'
-              : 'Prayer reminders (adhan)',
-          channelDescription: isFajr
-              ? 'Plays the Fajr adhan at dawn.'
-              : 'Plays the adhan when Dhuhr, Asr, Maghrib or Isha begins.',
-          importance: Importance.max,
-          priority: Priority.max,
-          category: AndroidNotificationCategory.alarm,
-          audioAttributesUsage: AudioAttributesUsage.alarm,
-          sound: RawResourceAndroidNotificationSound(
-            isFajr ? _adhanFajrResource : _adhanResource,
-          ),
+        isFajr ? _channelAdhanFajr : _channelAdhan,
+        isFajr ? 'Fajr reminder (adhan)' : 'Prayer reminders (adhan)',
+        channelDescription: isFajr
+            ? 'Plays the Fajr adhan at dawn.'
+            : 'Plays the adhan when Dhuhr, Asr, Maghrib or Isha begins.',
+        importance: Importance.max,
+        priority: Priority.max,
+        category: AndroidNotificationCategory.alarm,
+        audioAttributesUsage: AudioAttributesUsage.alarm,
+        sound: RawResourceAndroidNotificationSound(
+          isFajr ? _adhanFajrResource : _adhanResource,
         ),
+      ),
     };
 
     final darwin = switch (mode) {
@@ -228,8 +276,8 @@ class PrayerNotifications {
       AdhanMode.notificationOnly => const DarwinNotificationDetails(),
       // iOS caps custom notification sounds at 30 seconds.
       AdhanMode.adhan => DarwinNotificationDetails(
-          sound: isFajr ? 'adhan_fajr.aiff' : 'adhan.aiff',
-        ),
+        sound: isFajr ? 'adhan_fajr.aiff' : 'adhan.aiff',
+      ),
     };
 
     return NotificationDetails(android: android, iOS: darwin);
@@ -238,8 +286,10 @@ class PrayerNotifications {
   /// Whether the OS will honour exact alarms right now.
   Future<bool> _canScheduleExact() async {
     try {
-      final android = _plugin.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
+      final android = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
       if (android == null) return true; // iOS schedules exactly.
       return await android.canScheduleExactNotifications() ?? false;
     } catch (error) {
@@ -248,20 +298,90 @@ class PrayerNotifications {
     }
   }
 
+  /// Suhoor and iftar read as themselves, not as a prayer alert.
+  ///
+  /// "Fajr in 30 minutes" is the wrong sentence at 4am in Ramadan; what the
+  /// user needs to know is that eating stops.
+  Future<void> _scheduleFasting({
+    required int id,
+    required ReminderKind kind,
+    required DateTime at,
+    required int advance,
+    required bool exact,
+    required NotificationDetails details,
+    required String Function(String) tr,
+  }) async {
+    final suhoor = kind == ReminderKind.suhoor;
+    final title = !suhoor
+        ? tr('Iftar')
+        : advance > 0
+        ? tr(
+            'Suhoor ends in {minutes} minutes',
+          ).replaceAll('{minutes}', '$advance')
+        : tr('Suhoor ends');
+    final body = suhoor
+        ? tr('Fajr is close. Finish suhoor before it begins.')
+        : tr('Maghrib has begun. You may break your fast.');
+    try {
+      await _plugin.zonedSchedule(
+        id: id,
+        title: title,
+        body: body,
+        scheduledDate: tz.TZDateTime.from(at, tz.local),
+        notificationDetails: details,
+        androidScheduleMode: exact
+            ? AndroidScheduleMode.exactAllowWhileIdle
+            : AndroidScheduleMode.inexactAllowWhileIdle,
+      );
+    } catch (error) {
+      debugPrint('PrayerNotifications: could not schedule $id: $error');
+    }
+  }
+
   Future<void> _scheduleOne({
     required int id,
     required Prayer prayer,
+    required String label,
     required DateTime at,
     required AdhanMode adhanMode,
     required bool exact,
+    int advance = 0,
+    String language = 'en',
+    ReminderKind kind = ReminderKind.prayer,
   }) async {
     final details = _detailsFor(adhanMode, prayer);
+    String tr(String key) => AppStrings.translate(key, language);
+    final name = tr(label);
+    if (kind != ReminderKind.prayer) {
+      await _scheduleFasting(
+        id: id,
+        kind: kind,
+        at: at,
+        advance: advance,
+        exact: exact,
+        details: details,
+        tr: tr,
+      );
+      return;
+    }
+    final title = advance > 0
+        ? tr(
+            '{prayer} in {minutes} minutes',
+          ).replaceAll('{prayer}', name).replaceAll('{minutes}', '$advance')
+        : tr('{prayer} time').replaceAll('{prayer}', name);
+    final body = advance > 0
+        ? tr('Prepare for the upcoming prayer.')
+        : label == 'Jumma / Dhuhr'
+        ? tr(
+            'Dhuhr has begun. Check your mosque for the Jumma congregation time.',
+          )
+        : tr('It is time for {prayer}.').replaceAll('{prayer}', name);
 
     try {
       await _plugin.zonedSchedule(
         id: id,
-        title: '${prayer.label} time',
-        body: 'It is time for ${prayer.label}.',
+        title: title,
+        body: body,
         scheduledDate: tz.TZDateTime.from(at, tz.local),
         notificationDetails: details,
         androidScheduleMode: exact
@@ -275,14 +395,15 @@ class PrayerNotifications {
       try {
         await _plugin.zonedSchedule(
           id: id,
-          title: '${prayer.label} time',
-          body: 'It is time for ${prayer.label}.',
+          title: title,
+          body: body,
           scheduledDate: tz.TZDateTime.from(at, tz.local),
           notificationDetails: details,
           androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         );
       } catch (fallbackError) {
         debugPrint('PrayerNotifications: schedule failed: $fallbackError');
+        rethrow;
       }
     }
   }

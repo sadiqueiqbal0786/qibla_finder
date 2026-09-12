@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Shown under the widget in the launcher's picker. -->
+    <string name="widget_description">Next prayer, countdown and Qibla direction</string>
+</resources>

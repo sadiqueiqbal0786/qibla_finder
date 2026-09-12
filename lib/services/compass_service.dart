@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_compass/flutter_compass.dart';
 
 import '../qibla_logic.dart';
+import 'alignment_tracker.dart';
 
 /// How much the magnetometer reading can be trusted right now.
 enum CompassConfidence {
@@ -78,6 +79,34 @@ class CompassService {
   double? _platformAccuracy;
   bool _started = false;
   bool _disposed = false;
+  final ValueNotifier<bool> aligned = ValueNotifier(false);
+  final AlignmentTracker _alignment = AlignmentTracker();
+  double? _target;
+  DateTime? _lastReading;
+  Timer? _staleTimer;
+
+  void setTarget(double? bearing) {
+    if (_target == bearing) return;
+    _target = bearing;
+    _alignment.reset();
+    aligned.value = false;
+  }
+
+  void stop() {
+    _subscription?.cancel();
+    _subscription = null;
+    _startupTimer?.cancel();
+    _staleTimer?.cancel();
+    _started = false;
+    _window.clear();
+    _smoothed = null;
+    _lastReading = null;
+    _alignment.reset();
+    aligned.value = false;
+    heading.value = null;
+    trueHeading.value = null;
+    confidence.value = CompassConfidence.unknown;
+  }
 
   static const int _windowSize = 24;
 
@@ -85,6 +114,15 @@ class CompassService {
   void start() {
     if (_started || _disposed) return;
     _started = true;
+    _staleTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      if (_lastReading != null &&
+          DateTime.now().difference(_lastReading!) >
+              const Duration(seconds: 5)) {
+        confidence.value = CompassConfidence.unknown;
+        _alignment.reset();
+        aligned.value = false;
+      }
+    });
 
     final events = FlutterCompass.events;
     if (events == null) {
@@ -143,6 +181,22 @@ class CompassService {
     heading.value = _smoothed;
     _publishTrueHeading();
     _updateConfidence();
+    final now = DateTime.now();
+    if (_lastReading != null &&
+        now.difference(_lastReading!) > const Duration(seconds: 2)) {
+      _alignment.reset();
+    }
+    _lastReading = now;
+    aligned.value = _alignment.update(
+      now: now,
+      delta: _target == null
+          ? null
+          : QiblaDirection.shortestDelta(trueHeading.value!, _target!),
+      reliable:
+          confidence.value == CompassConfidence.high &&
+          !interferenceDetected.value &&
+          declination.value != null,
+    );
   }
 
   /// Supplies the local declination. Safe to call before any sensor reading.
@@ -225,12 +279,15 @@ class CompassService {
   void resetCalibration() {
     _window.clear();
     interferenceDetected.value = false;
-    confidence.value =
-        heading.value == null ? CompassConfidence.unknown : confidence.value;
+    confidence.value = heading.value == null
+        ? CompassConfidence.unknown
+        : confidence.value;
   }
 
   void dispose() {
     _disposed = true;
+    _staleTimer?.cancel();
+    aligned.dispose();
     _startupTimer?.cancel();
     _startupTimer = null;
     _subscription?.cancel();

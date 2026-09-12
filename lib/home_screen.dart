@@ -1,21 +1,12 @@
 import 'package:flutter/material.dart';
+import 'l10n/app_strings.dart';
 
 import 'qibla_controller.dart';
 import 'qibla_logic.dart';
 import 'services/compass_service.dart';
+import 'theme/app_theme.dart';
 import 'widgets/qibla_compass.dart';
 import 'widgets/status_view.dart';
-
-/// Palette shared by the Qibla surface.
-class QiblaPalette {
-  const QiblaPalette._();
-
-  static const Color ink = Color(0xFF07160F);
-  static const Color inkSoft = Color(0xFF0E2C1E);
-  static const Color accent = Color(0xFF23C486);
-  static const Color onDark = Colors.white;
-  static Color onDarkMuted = Colors.white.withValues(alpha: 0.58);
-}
 
 /// The Qibla tab.
 ///
@@ -53,8 +44,7 @@ class QiblaScreen extends StatelessWidget {
           icon: Icons.lock_outline_rounded,
           title: 'Location permission needed',
           message:
-              'The Qibla direction depends on where you are. Your location is '
-              'only used on this device and is never uploaded.',
+              'Location is used to calculate Qibla and prayer times. City names are provided by your device’s geocoding service.',
           primaryLabel: 'Grant permission',
           onPrimary: controller.refresh,
           busy: controller.isRefreshing,
@@ -108,8 +98,8 @@ class _LoadingView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const DecoratedBox(
-      decoration: BoxDecoration(
+    return DecoratedBox(
+      decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
@@ -123,7 +113,7 @@ class _LoadingView extends StatelessWidget {
             CircularProgressIndicator(color: QiblaPalette.accent),
             SizedBox(height: 18),
             Text(
-              'Finding your location…',
+              context.tr('Finding your location…'),
               style: TextStyle(fontSize: 15, color: Colors.white70),
             ),
           ],
@@ -181,6 +171,23 @@ class _CompassView extends StatelessWidget {
                           children: [
                             _PlaceLine(controller: controller),
                             const SizedBox(height: 6),
+                            if (controller.positionIsStale &&
+                                controller.position != null)
+                              Text(
+                                '${context.tr('Saved location')} · ${DateTime.now().difference(controller.position!.timestamp).inHours.abs()}h',
+                                style: const TextStyle(color: Colors.white70),
+                              ),
+                            if (controller.manualLocation)
+                              Text(
+                                context.tr('Selected city'),
+                                style: TextStyle(color: Colors.white70),
+                              ),
+                            if (controller.locationWarning != null)
+                              Text(
+                                context.tr(controller.locationWarning!),
+                                style: const TextStyle(color: Colors.amber),
+                                textAlign: TextAlign.center,
+                              ),
                             _TrustLine(compass: controller.compass),
                             const Spacer(),
                             QiblaCompass(
@@ -217,7 +224,9 @@ class _PlaceLine extends StatelessWidget {
   Widget build(BuildContext context) {
     final place =
         controller.placeName ??
-        (controller.positionIsStale ? 'Last known location' : 'Locating…');
+        context.tr(
+          controller.positionIsStale ? 'Last known location' : 'Locating…',
+        );
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -269,7 +278,7 @@ class _TrustLine extends StatelessWidget {
               confidence,
             )) {
               (true, _) => (
-                'Magnetic interference — move away from metal and electronics',
+                'Readings are unstable. Hold still, away from metal and electronics.',
                 const Color(0xFFFF6B6B),
                 Icons.warning_amber_rounded,
               ),
@@ -288,13 +297,18 @@ class _TrustLine extends StatelessWidget {
                 const Color(0xFFFFC46B),
                 Icons.gesture_rounded,
               ),
+              (_, CompassConfidence.unknown) => (
+                'Waiting for reliable compass readings',
+                const Color(0xFFFFC46B),
+                Icons.explore_outlined,
+              ),
               _ => null,
             };
 
             if (notice == null) return const SizedBox(height: 20);
 
-            return SizedBox(
-              height: 20,
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -302,9 +316,7 @@ class _TrustLine extends StatelessWidget {
                   const SizedBox(width: 6),
                   Flexible(
                     child: Text(
-                      notice.$1,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                      context.tr(notice.$1),
                       style: TextStyle(fontSize: 12.5, color: notice.$2),
                     ),
                   ),
@@ -329,10 +341,16 @@ class _TurnInstruction extends StatelessWidget {
     final bearing = controller.qiblaBearing;
     if (bearing == null) return const SizedBox(height: 78);
 
-    return ValueListenableBuilder<double?>(
-      valueListenable: controller.compass.trueHeading,
-      builder: (context, heading, _) {
-        if (heading == null) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([
+        controller.compass.trueHeading,
+        controller.compass.aligned,
+        controller.compass.confidence,
+      ]),
+      builder: (context, _) {
+        final heading = controller.compass.trueHeading.value;
+        if (heading == null ||
+            controller.compass.confidence.value == CompassConfidence.unknown) {
           return _Instruction(
             headline:
                 '${bearing.toStringAsFixed(0)}° ${QiblaDirection.cardinal(bearing)}',
@@ -342,7 +360,7 @@ class _TurnInstruction extends StatelessWidget {
         }
 
         final delta = QiblaDirection.shortestDelta(heading, bearing);
-        if (delta.abs() <= 5) {
+        if (controller.compass.aligned.value) {
           return const _Instruction(
             headline: 'Facing the Qibla',
             caption: 'You are aligned with the Kaaba',
@@ -350,11 +368,19 @@ class _TurnInstruction extends StatelessWidget {
           );
         }
 
+        if (delta.abs() <= 5) {
+          return const _Instruction(
+            headline: 'Hold steady',
+            caption: 'Checking alignment and compass accuracy',
+            aligned: false,
+          );
+        }
         final right = delta > 0;
         return _Instruction(
-          headline: 'Turn ${right ? 'right' : 'left'} ${delta.abs().round()}°',
+          headline:
+              '${context.tr(right ? 'Turn right' : 'Turn left')} ${delta.abs().round()}°',
           caption:
-              'Qibla is ${bearing.toStringAsFixed(0)}° ${QiblaDirection.cardinal(bearing)}',
+              '${context.tr('Qibla')}: ${bearing.toStringAsFixed(0)}° ${QiblaDirection.cardinal(bearing)}',
           aligned: false,
         );
       },
@@ -375,8 +401,8 @@ class _Instruction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 78,
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -389,11 +415,11 @@ class _Instruction extends StatelessWidget {
               letterSpacing: -0.5,
               color: aligned ? QiblaPalette.accent : QiblaPalette.onDark,
             ),
-            child: Text(headline, textAlign: TextAlign.center),
+            child: Text(context.tr(headline), textAlign: TextAlign.center),
           ),
           const SizedBox(height: 5),
           Text(
-            caption,
+            context.tr(caption),
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 13.5, color: QiblaPalette.onDarkMuted),
           ),
@@ -489,7 +515,7 @@ class _Fact extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           Text(
-            label,
+            context.tr(label),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(

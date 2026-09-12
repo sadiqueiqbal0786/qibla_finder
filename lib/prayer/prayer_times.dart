@@ -7,13 +7,13 @@ enum Prayer { fajr, sunrise, dhuhr, asr, maghrib, isha }
 
 extension PrayerLabel on Prayer {
   String get label => switch (this) {
-        Prayer.fajr => 'Fajr',
-        Prayer.sunrise => 'Sunrise',
-        Prayer.dhuhr => 'Dhuhr',
-        Prayer.asr => 'Asr',
-        Prayer.maghrib => 'Maghrib',
-        Prayer.isha => 'Isha',
-      };
+    Prayer.fajr => 'Fajr',
+    Prayer.sunrise => 'Sunrise',
+    Prayer.dhuhr => 'Dhuhr',
+    Prayer.asr => 'Asr',
+    Prayer.maghrib => 'Maghrib',
+    Prayer.isha => 'Isha',
+  };
 
   /// Sunrise is a boundary, not a prayer — it gets no reminder and is styled
   /// differently in the schedule.
@@ -74,6 +74,12 @@ class PrayerTimes {
       zoneName != null &&
       (timezoneOffsetHours - deviceOffsetHours).abs() > 0.01;
 
+  /// Friday's calculated Dhuhr start is not a mosque congregation time.
+  String labelFor(Prayer prayer) =>
+      prayer == Prayer.dhuhr && date.weekday == DateTime.friday
+      ? 'Jumma / Dhuhr'
+      : prayer.label;
+
   /// The absolute instant of [prayer].
   DateTime? operator [](Prayer prayer) => times[prayer];
 
@@ -84,9 +90,9 @@ class PrayerTimes {
   DateTime? wallClock(Prayer prayer) {
     final instant = times[prayer];
     if (instant == null) return null;
-    return instant
-        .toUtc()
-        .add(Duration(minutes: (timezoneOffsetHours * 60).round()));
+    return instant.toUtc().add(
+      Duration(minutes: (timezoneOffsetHours * 60).round()),
+    );
   }
 
   /// The next prayer strictly after [from], or null if today is exhausted.
@@ -121,11 +127,21 @@ class PrayerCalculator {
     required this.method,
     required this.asrMadhab,
     this.highLatitudeRule = HighLatitudeRule.angleBased,
+    this.offsets = const <Prayer, int>{},
   });
 
   final CalculationMethod method;
   final AsrMadhab asrMadhab;
   final HighLatitudeRule highLatitudeRule;
+
+  /// Per-prayer correction in minutes.
+  ///
+  /// No calculation reproduces a particular mosque's printed timetable, which
+  /// may carry its own conventions. Applying the correction here rather than
+  /// at the display layer means the schedule, the countdowns, the reminders
+  /// and the widget all move together; a correction the alarms ignored would
+  /// be worse than none.
+  final Map<Prayer, int> offsets;
 
   /// Standard atmospheric refraction plus solar semi-diameter.
   static const double _riseSetAngle = 0.833;
@@ -143,11 +159,10 @@ class PrayerCalculator {
     // the platform rather than by us guessing. Injectable so the engine can be
     // tested against other cities, and so travel mode can pass the offset of a
     // saved location rather than the phone's current one.
-    final offsetHours =
-        utcOffsetHours ?? local.timeZoneOffset.inMinutes / 60.0;
+    final offsetHours = utcOffsetHours ?? local.timeZoneOffset.inMinutes / 60.0;
 
-    final jd = Solar.julianDay(local.year, local.month, local.day) -
-        longitude / 360.0;
+    final jd =
+        Solar.julianDay(local.year, local.month, local.day) - longitude / 360.0;
 
     double? angleTime(double angle, {required bool beforeNoon}) =>
         Solar.hourAngleTime(
@@ -174,9 +189,7 @@ class PrayerCalculator {
 
     double? isha;
     if (method.ishaMode == IshaMode.interval) {
-      isha = maghrib == null
-          ? null
-          : maghrib + method.ishaInterval / 60.0;
+      isha = maghrib == null ? null : maghrib + method.ishaInterval / 60.0;
     } else {
       isha = angleTime(method.ishaAngle, beforeNoon: false);
     }
@@ -195,17 +208,18 @@ class PrayerCalculator {
 
     if (fajr == null) {
       usedHighLatitude = true;
-      fajr = sunrise -
-          _nightPortion(nightLength, method.fajrAngle);
+      fajr = sunrise - _nightPortion(nightLength, method.fajrAngle);
     }
     if (isha == null) {
       usedHighLatitude = true;
-      isha = sunset +
+      isha =
+          sunset +
           _nightPortion(
-              nightLength,
-              method.ishaMode == IshaMode.angle
-                  ? method.ishaAngle
-                  : method.fajrAngle);
+            nightLength,
+            method.ishaMode == IshaMode.angle
+                ? method.ishaAngle
+                : method.fajrAngle,
+          );
     }
     maghrib ??= sunset;
 
@@ -217,12 +231,14 @@ class PrayerCalculator {
       usedHighLatitude = true;
       fajr = fajrLimit;
     }
-    final ishaLimit = sunset +
+    final ishaLimit =
+        sunset +
         _nightPortion(
-            nightLength,
-            method.ishaMode == IshaMode.angle
-                ? method.ishaAngle
-                : method.fajrAngle);
+          nightLength,
+          method.ishaMode == IshaMode.angle
+              ? method.ishaAngle
+              : method.fajrAngle,
+        );
     if (isha > ishaLimit) {
       usedHighLatitude = true;
       isha = ishaLimit;
@@ -243,7 +259,9 @@ class PrayerCalculator {
       // Convert from mean solar time at this longitude to the location's
       // clock, then to an absolute instant.
       final localHours = hours + offsetHours - longitude / 15.0;
-      times[prayer] = _toInstant(local, localHours, offsetHours);
+      final at = _toInstant(local, localHours, offsetHours);
+      final shift = offsets[prayer] ?? 0;
+      times[prayer] = shift == 0 ? at : at.add(Duration(minutes: shift));
     });
 
     return PrayerTimes(

@@ -80,6 +80,36 @@ void paintGlyph(Canvas canvas, double size, {double scale = 1.0}) {
   canvas.drawCircle(centre, size * 0.032 * scale, Paint()..color = accent);
 }
 
+/// The compass mark as a flat white silhouette for the status bar.
+void paintNotificationGlyph(Canvas canvas, double size) {
+  final centre = Offset(size / 2, size / 2);
+  final radius = size * 0.40;
+  final white = Paint()..color = Colors.white;
+  canvas.drawCircle(
+    centre,
+    radius,
+    Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = size * 0.085
+      ..color = Colors.white,
+  );
+  canvas.save();
+  canvas.translate(centre.dx, centre.dy);
+  canvas.rotate(38 * math.pi / 180);
+  final length = radius * 0.82;
+  canvas.drawPath(
+    Path()
+      ..moveTo(0, -length)
+      ..lineTo(-size * 0.105, -length * 0.24)
+      ..lineTo(0, -length * 0.08)
+      ..lineTo(size * 0.105, -length * 0.24)
+      ..close(),
+    white,
+  );
+  canvas.restore();
+  canvas.drawCircle(centre, size * 0.062, white);
+}
+
 void paintBackground(Canvas canvas, double size, {bool rounded = false}) {
   final rect = Rect.fromLTWH(0, 0, size, size);
   final paint = Paint()
@@ -163,6 +193,25 @@ void main() {
       canvas.restore();
       canvas.drawCircle(centre, size * 0.032 * scale, Paint()..color = Colors.white);
     });
+
+    // Status-bar icon. Android throws away the colour and keeps the alpha,
+    // so a full-colour launcher icon flattens to a featureless blob. This is
+    // a white-on-transparent silhouette, drawn near-full-bleed and with a
+    // heavier stroke because it renders at 24dp.
+    const densities = <String, int>{
+      'mdpi': 24,
+      'hdpi': 36,
+      'xhdpi': 48,
+      'xxhdpi': 72,
+      'xxxhdpi': 96,
+    };
+    for (final entry in densities.entries) {
+      await write(
+        'android/app/src/main/res/drawable-${entry.key}/ic_notification.png',
+        entry.value,
+        (canvas, size) => paintNotificationGlyph(canvas, size),
+      );
+    }
 
     expect(File('$dir/icon.png').existsSync(), isTrue);
   });

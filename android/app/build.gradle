@@ -54,6 +54,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Keep QA installs separate from the Play Store app and its data.
+            applicationIdSuffix ".debug"
+        }
         release {
             signingConfig hasReleaseKeystore ? signingConfigs.release : signingConfigs.debug
         }
@@ -71,6 +75,7 @@ flutter {
 }
 
 dependencies {
+    implementation "com.google.android.play:app-update:2.1.0"
     // flutter_local_notifications >= 18 requires desugar_jdk_libs 2.1.4+.
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
 }

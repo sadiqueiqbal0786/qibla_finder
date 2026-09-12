@@ -56,6 +56,7 @@ void main() {
       settings.setMethod(CalculationMethod.egyptian);
       settings.applyRegionalDefaults('PK');
       expect(settings.method.id, 'egyptian');
+      await settings.flushed;
     });
 
     test('automatic detection applies when untouched', () async {
@@ -63,6 +64,7 @@ void main() {
       settings.applyRegionalDefaults('PK');
       expect(settings.method.id, 'karachi');
       expect(settings.asrMadhab, AsrMadhab.hanafi);
+      await settings.flushed;
     });
   });
 
@@ -86,9 +88,15 @@ void main() {
 
     test('keeps exactly one current-location row', () async {
       await db.rememberCurrentLocation(
-          label: 'Seattle', latitude: 47.6, longitude: -122.3);
+        label: 'Seattle',
+        latitude: 47.6,
+        longitude: -122.3,
+      );
       await db.rememberCurrentLocation(
-          label: 'London', latitude: 51.5, longitude: -0.12);
+        label: 'London',
+        latitude: 51.5,
+        longitude: -0.12,
+      );
 
       final current = await db.lastKnownLocation();
       expect(current, isNotNull);

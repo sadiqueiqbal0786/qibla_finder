@@ -3,7 +3,12 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import 'splash_screen.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'app_shell.dart';
+import 'data/app_database.dart';
+import 'prayer/prayer_settings.dart';
+import 'services/background_refresh.dart';
+import 'theme/app_theme.dart';
 
 void main() {
   // runZonedGuarded plus the two framework hooks below mean an unexpected
@@ -31,40 +36,60 @@ void main() {
   );
 }
 
-class QiblaApp extends StatelessWidget {
+class QiblaApp extends StatefulWidget {
   const QiblaApp({super.key});
+  @override
+  State<QiblaApp> createState() => _QiblaAppState();
+}
 
-  static const Color seed = Color(0xFF156F3F);
+class _QiblaAppState extends State<QiblaApp> {
+  final _database = AppDatabase();
+  late final Future<PrayerSettings> _settings = PrayerSettings.load(_database);
+  PrayerSettings? _loaded;
+  @override
+  void initState() {
+    super.initState();
+    unawaited(BackgroundRefresh.initialize());
+  }
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Qibla Compass',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: seed),
-        scaffoldBackgroundColor: Colors.white,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: seed,
-          foregroundColor: Colors.white,
-          elevation: 0,
-        ),
-      ),
-      // Keep the compass legible regardless of the system font-scale setting.
-      builder: (context, child) {
-        final media = MediaQuery.of(context);
-        return MediaQuery(
-          data: media.copyWith(
-            textScaler: media.textScaler.clamp(
-              minScaleFactor: 0.85,
-              maxScaleFactor: 1.3,
-            ),
-          ),
-          child: child ?? const SizedBox.shrink(),
-        );
-      },
-      home: const SplashScreen(),
+  void dispose() {
+    _loaded?.dispose();
+    unawaited(
+      (_loaded?.flushed ?? Future<void>.value()).then((_) => _database.close()),
     );
+    super.dispose();
   }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<PrayerSettings>(
+    future: _settings,
+    builder: (context, snapshot) {
+      final settings = snapshot.data;
+      if (settings == null) {
+        return const MaterialApp(
+          home: Scaffold(body: Center(child: CircularProgressIndicator())),
+        );
+      }
+      _loaded = settings;
+      return ListenableBuilder(
+        listenable: settings,
+        builder: (context, _) => MaterialApp(
+          title: 'Qibla Finder',
+          debugShowCheckedModeBanner: false,
+          locale: Locale(settings.language),
+          supportedLocales: const [Locale('en'), Locale('hi'), Locale('ur')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          themeMode: switch (settings.theme) {
+            'dark' => ThemeMode.dark,
+            'light' => ThemeMode.light,
+            _ => ThemeMode.system,
+          },
+          theme: AppTheme.light,
+          darkTheme: AppTheme.dark,
+          home: AppShell(settings: settings, database: _database),
+        ),
+      );
+    },
+  );
 }

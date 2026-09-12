@@ -6,10 +6,7 @@ import 'package:timezone_finder/timezone_finder.dart';
 /// The time zone a set of coordinates actually sits in.
 @immutable
 class ResolvedZone {
-  const ResolvedZone({
-    required this.name,
-    required this.offsetHours,
-  });
+  const ResolvedZone({required this.name, required this.offsetHours});
 
   /// IANA identifier, e.g. `America/Los_Angeles`.
   final String name;
@@ -31,6 +28,18 @@ class ResolvedZone {
 /// centroid, and by `package:timezone` for the DST rules.
 class TimezoneResolver {
   TimezoneResolver();
+
+  static DateTime clockAt(DateTime instant, String? zoneName) {
+    ensureInitialised();
+    return zoneName == null
+        ? instant.toLocal()
+        : tz.TZDateTime.from(instant, tz.getLocation(zoneName));
+  }
+
+  static DateTime calendarDay(DateTime instant, String? zoneName) {
+    final local = clockAt(instant, zoneName);
+    return DateTime.utc(local.year, local.month, local.day);
+  }
 
   static bool _tzInitialised = false;
 

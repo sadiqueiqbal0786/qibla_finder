@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../l10n/app_strings.dart';
 import '../qibla_logic.dart';
 import '../services/compass_service.dart';
 
@@ -43,12 +44,24 @@ class QiblaCompass extends StatelessWidget {
                 ? QiblaDirection.shortestDelta(heading, bearing)
                 : null;
 
-            return CustomPaint(
-              size: Size.square(size),
-              painter: _CompassPainter(
-                heading: heading,
-                qiblaBearing: bearing,
-                delta: delta,
+            return ValueListenableBuilder<bool>(
+              valueListenable: compass.aligned,
+              builder: (context, aligned, _) => Semantics(
+                label: context.tr('Qibla compass'),
+                value: bearing == null
+                    ? context.tr('Location unavailable')
+                    : context
+                          .tr('Qibla bearing {degrees} degrees from true north')
+                          .replaceAll('{degrees}', '${bearing.round()}'),
+                child: CustomPaint(
+                  size: Size.square(size),
+                  painter: _CompassPainter(
+                    heading: heading,
+                    qiblaBearing: bearing,
+                    delta: delta,
+                    confirmed: aligned,
+                  ),
+                ),
               ),
             );
           },
@@ -63,6 +76,7 @@ class _CompassPainter extends CustomPainter {
     required this.heading,
     required this.qiblaBearing,
     required this.delta,
+    required this.confirmed,
   });
 
   final double? heading;
@@ -71,7 +85,8 @@ class _CompassPainter extends CustomPainter {
   /// Signed shortest turn to the Qibla, or null while the compass warms up.
   final double? delta;
 
-  bool get aligned => delta != null && delta!.abs() <= 5;
+  final bool confirmed;
+  bool get aligned => confirmed;
   bool get close => delta != null && delta!.abs() <= 20;
 
   static const Color _gold = Color(0xFFE9B44C);
@@ -101,8 +116,9 @@ class _CompassPainter extends CustomPainter {
     // The target is drawn device-referenced, at (qibla - heading).
     if (qiblaBearing != null) {
       canvas.save();
-      canvas.rotate(_rad(QiblaDirection.normalize(
-          qiblaBearing! - (heading ?? 0))));
+      canvas.rotate(
+        _rad(QiblaDirection.normalize(qiblaBearing! - (heading ?? 0))),
+      );
       _paintQiblaBeam(canvas, dialR);
       _paintKaabaBadge(canvas, dialR);
       canvas.restore();
@@ -170,8 +186,9 @@ class _CompassPainter extends CustomPainter {
         Paint()
           ..strokeCap = StrokeCap.round
           ..strokeWidth = cardinal ? 2.6 : (major ? 1.8 : 1.0)
-          ..color = Colors.white
-              .withValues(alpha: cardinal ? 0.92 : (major ? 0.55 : 0.22)),
+          ..color = Colors.white.withValues(
+            alpha: cardinal ? 0.92 : (major ? 0.55 : 0.22),
+          ),
       );
     }
   }
@@ -399,6 +416,7 @@ class _CompassPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _CompassPainter old) =>
+      old.confirmed != confirmed ||
       old.heading != heading ||
       old.qiblaBearing != qiblaBearing ||
       old.delta != delta;

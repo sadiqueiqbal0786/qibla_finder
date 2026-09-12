@@ -34,8 +34,7 @@ class SavedLocations extends Table {
   /// True for the row tracking the device's current position.
   BoolColumn get isCurrent => boolean().withDefault(const Constant(false))();
 
-  DateTimeColumn get savedAt =>
-      dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get savedAt => dateTime().withDefault(currentDateAndTime)();
 }
 
 /// A record of prayers the user marked as performed.
@@ -51,19 +50,18 @@ class PrayerRecords extends Table {
   /// [Prayer] enum name, stored as text so reordering the enum is harmless.
   TextColumn get prayer => text().withLength(min: 1, max: 20)();
 
-  DateTimeColumn get markedAt =>
-      dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get markedAt => dateTime().withDefault(currentDateAndTime)();
 
   @override
   List<Set<Column<Object>>> get uniqueKeys => [
-        {day, prayer},
-      ];
+    {day, prayer},
+  ];
 }
 
 @DriftDatabase(tables: [Preferences, SavedLocations, PrayerRecords])
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor])
-      : super(executor ?? driftDatabase(name: 'qibla_finder'));
+    : super(executor ?? driftDatabase(name: 'qibla_finder'));
 
   @override
   int get schemaVersion => 1;
@@ -84,9 +82,9 @@ class AppDatabase extends _$AppDatabase {
   // ------------------------------------------------------------- locations
 
   Future<List<SavedLocation>> allSavedLocations() {
-    return (select(savedLocations)
-          ..orderBy([(t) => OrderingTerm.desc(t.savedAt)]))
-        .get();
+    return (select(
+      savedLocations,
+    )..orderBy([(t) => OrderingTerm.desc(t.savedAt)])).get();
   }
 
   Future<int> saveLocation({
@@ -118,10 +116,12 @@ class AppDatabase extends _$AppDatabase {
     required double latitude,
     required double longitude,
     String? isoCountryCode,
+    DateTime? savedAt,
   }) async {
     await transaction(() async {
-      await (delete(savedLocations)..where((t) => t.isCurrent.equals(true)))
-          .go();
+      await (delete(
+        savedLocations,
+      )..where((t) => t.isCurrent.equals(true))).go();
       await into(savedLocations).insert(
         SavedLocationsCompanion.insert(
           label: label,
@@ -129,14 +129,16 @@ class AppDatabase extends _$AppDatabase {
           longitude: longitude,
           isoCountryCode: Value(isoCountryCode),
           isCurrent: const Value(true),
+          savedAt: savedAt == null ? const Value.absent() : Value(savedAt),
         ),
       );
     });
   }
 
   Future<SavedLocation?> lastKnownLocation() {
-    return (select(savedLocations)..where((t) => t.isCurrent.equals(true)))
-        .getSingleOrNull();
+    return (select(
+      savedLocations,
+    )..where((t) => t.isCurrent.equals(true))).getSingleOrNull();
   }
 
   // ---------------------------------------------------------------- record
@@ -155,9 +157,9 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> unmarkPrayer(DateTime day, String prayer) {
     final midnight = DateTime(day.year, day.month, day.day);
-    return (delete(prayerRecords)
-          ..where((t) => t.day.equals(midnight) & t.prayer.equals(prayer)))
-        .go();
+    return (delete(
+      prayerRecords,
+    )..where((t) => t.day.equals(midnight) & t.prayer.equals(prayer))).go();
   }
 
   /// Prayer names marked for [day]. Watched so the schedule updates itself.
